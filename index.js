@@ -39,7 +39,7 @@ Seeder.prototype.connect = function(db, cb) {
 			console.log('Successfully initialized mongoose-seed');
 			cb();
 		}
-	});	
+	});
 };
 
 Seeder.prototype.loadModels = function(modelPaths) {
@@ -51,13 +51,13 @@ Seeder.prototype.loadModels = function(modelPaths) {
 
 Seeder.prototype.invalidModelCheck = function(models, cb) {
 	var invalidModels = [];
-	
+
 	models.forEach(function(model) {
 		if(_.indexOf(mongoose.modelNames(), model) === -1) {
 			invalidModels.push(model);
 		}
 	});
-	
+
 	if (invalidModels.length) {
 		cb(new Error('Models not registered in Mongoose: ' + invalidModels));
 	} else {
@@ -108,7 +108,7 @@ Seeder.prototype.clearModels = function(models, cb) {
 	});
 };
 
-Seeder.prototype.populateModels = function(seedData) {
+Seeder.prototype.populateModels = function(seedData, cb) {
 	if(!this.connected) {
 		return new Error('Not connected to db, exiting function');
 	}
@@ -117,25 +117,41 @@ Seeder.prototype.populateModels = function(seedData) {
 
 	// Confirm that all Models have been registered in Mongoose
 	var invalidModels = this.invalidModelCheck(modelNames, function(err) {
-		if (err) {
+	  if (err) {
 			console.error(chalk.red('Error: ' + err.message));
 			return;
 		}
 
-		// Populate each model
-		seedData.forEach(function(entry) {
-			var Model = mongoose.model(entry.model);
-			entry.documents.forEach(function(document, j) {
-				Model.create(document, function(err) {
-					if (err) {
-						console.error(chalk.red('Error creating document [' + j + '] of ' + entry.model + ' model'));
-						console.error(chalk.red('Error: ' + err.message));
-						return;
-					}
-					console.log('Successfully created document [' + j + '] of ' + entry.model + ' model');
-				});
-			});
-		});
+    // Populate each model
+    async.each(seedData, function (entry, callback) {
+      var Model = mongoose.model(entry.model);
+      async.forEachOf(entry.documents,
+        function(document, index, callback) {
+          Model.create(document, function(err) {
+            if (err) {
+              console.error(chalk.red('Error creating document [' + index + '] of ' + entry.model + ' model'));
+              console.error(chalk.red('Error: ' + err.message));
+              return;
+            }
+            console.log('Successfully created document [' + index + '] of ' + entry.model + ' model');
+            callback();
+          });
+        },
+        function(err) {
+          if (err) {
+            console.error(chalk.red('Error: ' + err.message));
+            return;
+          }
+          callback();
+        }
+      );
+    }, function(err) {
+      if (err) {
+        console.error(chalk.red('Error: ' + err.message));
+        return;
+      }
+      cb();
+    });
 
 	});
 };
